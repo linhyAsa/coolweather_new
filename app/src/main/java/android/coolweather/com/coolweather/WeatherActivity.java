@@ -9,10 +9,14 @@ import android.coolweather.com.coolweather.util.Utility;
 import android.graphics.Color;
 import android.os.Build;
 import android.preference.PreferenceManager;
+import android.support.v4.view.GravityCompat;
+import android.support.v4.widget.DrawerLayout;
+import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -48,6 +52,11 @@ public class WeatherActivity extends AppCompatActivity {
 
     private ImageView bingPicImg;
 
+    public SwipeRefreshLayout swipeRefreshLayout;
+
+    public DrawerLayout drawerLayout;
+    private Button navButton;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -75,22 +84,39 @@ public class WeatherActivity extends AppCompatActivity {
 
         bingPicImg = (ImageView)findViewById(R.id.iv_bing_pic_img);
 
+        swipeRefreshLayout = (SwipeRefreshLayout)findViewById(R.id.srl_swipe_refrresh);
+        swipeRefreshLayout.setColorSchemeResources(R.color.colorPrimary);
+
+        drawerLayout = (DrawerLayout)findViewById(R.id.dl_drawer_layout);
+        navButton = (Button)findViewById(R.id.btn_nav_button);
+
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
         String weatherString = prefs.getString("weather", null);
+
+        final String weatherId;
+
         if (weatherString != null) {
             //有缓存时直接解析天气数据
             LogUtil.d(TAG, "缓存中有该地的天气信息，直接送去Utility中解析");
             Weather weather = Utility.handleWeatherResponse(weatherString);
             LogUtil.d(TAG, "完成解析");
+            weatherId = weather.basic.weatherId;
             showWeatherInfo(weather);
             LogUtil.d(TAG, "已在界面上成功显示");
         } else {
             //无缓存时去服务器查询天气
             LogUtil.d(TAG, "缓存中无该地的天气信息，向服务器请求");
-            String weatherId = getIntent().getStringExtra("weather_id");
+            weatherId = getIntent().getStringExtra("weather_id");
             weatherLayout.setVisibility(View.INVISIBLE);
             requestWeather(weatherId);
         }
+
+        swipeRefreshLayout.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
+            @Override
+            public void onRefresh() {
+                requestWeather(weatherId);
+            }
+        });
 
         String bingPic = prefs.getString("bing_pic", null);
         if (bingPic != null) {
@@ -98,13 +124,20 @@ public class WeatherActivity extends AppCompatActivity {
         } else {
             loadBingPic();
         }
+
+        navButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                drawerLayout.openDrawer(GravityCompat.START);
+            }
+        });
     }
 
     /**
      * 根据天气id请求城市天气信息
      * @param weatherId
      */
-    private void requestWeather(final String weatherId) {
+    public void requestWeather(final String weatherId) {
         String weatherUrl = "http://guolin.tech/api/weather?cityid=" + weatherId + "&key=32206b9a18dc43d7b517e3831dea4750";
         HttpUtil.sendOkHttpRequest(weatherUrl, new Callback() {
             @Override
@@ -113,6 +146,7 @@ public class WeatherActivity extends AppCompatActivity {
                     @Override
                     public void run() {
                         Toast.makeText(WeatherActivity.this, "获取天气信息失败", Toast.LENGTH_SHORT).show();
+                        swipeRefreshLayout.setRefreshing(false);
                     }
                 });
             }
@@ -136,6 +170,7 @@ public class WeatherActivity extends AppCompatActivity {
                         } else {
                             Toast.makeText(WeatherActivity.this, "获取天气信息失败", Toast.LENGTH_SHORT).show();
                         }
+                        swipeRefreshLayout.setRefreshing(false); //表示刷新时间结束，并隐藏刷新进度条
                     }
                 });
             }
